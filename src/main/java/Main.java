@@ -137,11 +137,8 @@ public class Main {
             } else {
                 String fullPath = getPath(command);
                 if (fullPath != null) {
-                    List<String> executeArgs = new ArrayList<>();
-                    executeArgs.add(fullPath);
-                    for (int i = 1; i < commandParts.size(); i++) {
-                        executeArgs.add(commandParts.get(i));
-                    }
+                    List<String> executeArgs = new ArrayList<>(commandParts);
+                    executeArgs.set(0, fullPath);
                     
                     ProcessBuilder pb = new ProcessBuilder(executeArgs);
                     pb.directory(new File(currentDir));
