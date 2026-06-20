@@ -32,7 +32,8 @@ public class Main {
             }
 
             String redirectFile = null;
-            int redirectIndex = -1;
+            String stderrFile = null;
+            int firstRedirectIndex = -1;
 
             for (int i = 0; i < parts.size(); i++) {
                 String token = parts.get(i);
@@ -40,30 +41,61 @@ public class Main {
                 if (token.equals(">") || token.equals("1>")) {
                     if (i + 1 < parts.size()) {
                         redirectFile = parts.get(i + 1);
-                        redirectIndex = i;
-                        break;
+                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                            firstRedirectIndex = i;
+                        }
+                    }
+                } else if (token.equals("2>")) {
+                    if (i + 1 < parts.size()) {
+                        stderrFile = parts.get(i + 1);
+                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                            firstRedirectIndex = i;
+                        }
+                    }
+                } else if (token.startsWith("2>")) {
+                    stderrFile = token.substring(2);
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                        firstRedirectIndex = i;
                     }
                 } else if (token.startsWith("1>")) {
                     redirectFile = token.substring(2);
-                    redirectIndex = i;
-                    break;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                        firstRedirectIndex = i;
+                    }
                 } else if (token.startsWith(">")) {
                     redirectFile = token.substring(1);
-                    redirectIndex = i;
-                    break;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                        firstRedirectIndex = i;
+                    }
                 }
             }
 
             List<String> commandParts;
-            if (redirectIndex != -1) {
-                commandParts = new ArrayList<>(parts.subList(0, redirectIndex));
+            if (firstRedirectIndex != -1) {
+                commandParts = new ArrayList<>(parts.subList(0, firstRedirectIndex));
+            } else {
+                commandParts = parts;
+            }
+
+            if (redirectFile != null) {
                 File file = new File(redirectFile);
                 File parent = file.getParentFile();
                 if (parent != null) {
                     parent.mkdirs();
                 }
-            } else {
-                commandParts = parts;
+            }
+            if (stderrFile != null) {
+                File file = new File(stderrFile);
+                File parent = file.getParentFile();
+                if (parent != null) {
+                    parent.mkdirs();
+                }
+                // Create/truncate the file even if nothing is ever written to it
+                // (builtins like echo/pwd/type never write stderr today,
+                // but the file must still exist per the spec).
+                try (PrintWriter writer = new PrintWriter(new FileWriter(stderrFile))) {
+                    // truncate/create only
+                }
             }
 
             if (commandParts.isEmpty()) {
@@ -172,10 +204,17 @@ public class Main {
 
                     if (redirectFile != null) {
                         pb.redirectOutput(new File(redirectFile));
-                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                     } else {
-                        pb.inheritIO();
+                        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                     }
+
+                    if (stderrFile != null) {
+                        pb.redirectError(new File(stderrFile));
+                    } else {
+                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                    }
+
+                    pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
 
                     Process process = pb.start();
                     process.waitFor();
