@@ -34,6 +34,7 @@ public class Main {
             String redirectFile = null;
             String stderrFile = null;
             boolean appendStdout = false;
+            boolean appendStderr = false;
             int firstRedirectIndex = -1;
 
             for (int i = 0; i < parts.size(); i++) {
@@ -43,6 +44,14 @@ public class Main {
                     if (i + 1 < parts.size()) {
                         redirectFile = parts.get(i + 1);
                         appendStdout = true;
+                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                            firstRedirectIndex = i;
+                        }
+                    }
+                } else if (token.equals("2>>")) {
+                    if (i + 1 < parts.size()) {
+                        stderrFile = parts.get(i + 1);
+                        appendStderr = true;
                         if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
                             firstRedirectIndex = i;
                         }
@@ -58,6 +67,7 @@ public class Main {
                 } else if (token.equals("2>")) {
                     if (i + 1 < parts.size()) {
                         stderrFile = parts.get(i + 1);
+                        appendStderr = false;
                         if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
                             firstRedirectIndex = i;
                         }
@@ -74,8 +84,15 @@ public class Main {
                     if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
                         firstRedirectIndex = i;
                     }
+                } else if (token.startsWith("2>>")) {
+                    stderrFile = token.substring(3);
+                    appendStderr = true;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                        firstRedirectIndex = i;
+                    }
                 } else if (token.startsWith("2>")) {
                     stderrFile = token.substring(2);
+                    appendStderr = false;
                     if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
                         firstRedirectIndex = i;
                     }
@@ -117,11 +134,18 @@ public class Main {
                 if (parent != null) {
                     parent.mkdirs();
                 }
-                // Create/truncate the file even if nothing is ever written to it
-                // (builtins like echo/pwd/type never write stderr today,
-                // but the file must still exist per the spec).
-                try (PrintWriter writer = new PrintWriter(new FileWriter(stderrFile))) {
-                    // truncate/create only
+                if (appendStderr) {
+                    // Append mode: just ensure the file exists, never clear it.
+                    if (!file.exists()) {
+                        file.createNewFile();
+                    }
+                } else {
+                    // Truncate mode: create/clear the file even if nothing is
+                    // ever written to it (builtins like echo/pwd/type never
+                    // write stderr today, but the file must still exist).
+                    try (PrintWriter writer = new PrintWriter(new FileWriter(stderrFile))) {
+                        // truncate/create only
+                    }
                 }
             }
 
@@ -240,7 +264,11 @@ public class Main {
                     }
 
                     if (stderrFile != null) {
-                        pb.redirectError(new File(stderrFile));
+                        if (appendStderr) {
+                            pb.redirectError(ProcessBuilder.Redirect.appendTo(new File(stderrFile)));
+                        } else {
+                            pb.redirectError(ProcessBuilder.Redirect.to(new File(stderrFile)));
+                        }
                     } else {
                         pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                     }
