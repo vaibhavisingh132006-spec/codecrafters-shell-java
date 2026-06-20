@@ -24,6 +24,7 @@ public class Main {
                 System.out.println(input.substring(5));
             } else if (input.startsWith("type ")) {
                 String arg = input.substring(5).trim();
+                
                 if (arg.equals("echo") || arg.equals("exit") || arg.equals("type")) {
                     System.out.println(arg + " is a shell builtin");
                 } else {
