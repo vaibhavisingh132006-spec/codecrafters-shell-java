@@ -12,25 +12,25 @@ public class Main {
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
         String currentDir = System.getProperty("user.dir");
-        
+
         while (true) {
             System.out.print("$ ");
             System.out.flush();
-            
+
             if (!scanner.hasNextLine()) {
                 break;
             }
-            
+
             String input = scanner.nextLine().trim();
             if (input.isEmpty()) {
                 continue;
             }
-            
+
             List<String> parts = parseArguments(input);
             if (parts.isEmpty()) {
                 continue;
             }
-            
+
             String redirectFile = null;
             int redirectIndex = -1;
 
@@ -65,12 +65,12 @@ public class Main {
             } else {
                 commandParts = parts;
             }
-            
+
             if (commandParts.isEmpty()) {
                 continue;
             }
             String command = commandParts.get(0);
-            
+
             if (command.equals("exit")) {
                 break;
             } else if (command.equals("pwd")) {
@@ -85,19 +85,19 @@ public class Main {
                 if (commandParts.size() > 1) {
                     String targetPath = commandParts.get(1);
                     String originalTarget = targetPath;
-                    
+
                     if (targetPath.equals("~")) {
                         String homeEnv = System.getenv("HOME");
                         if (homeEnv != null) {
                             targetPath = homeEnv;
                         }
                     }
-                    
+
                     try {
-                        Path basePat = Paths.get(currentDir);
-                        Path resolvedPath = basePat.resolve(targetPath).normalize();
+                        Path basePath = Paths.get(currentDir);
+                        Path resolvedPath = basePath.resolve(targetPath).normalize();
                         File targetDir = resolvedPath.toFile();
-                        
+
                         if (targetDir.exists() && targetDir.isDirectory()) {
                             currentDir = resolvedPath.toString();
                         } else {
@@ -115,7 +115,7 @@ public class Main {
                         sb.append(" ");
                     }
                 }
-                
+
                 if (redirectFile != null) {
                     try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile))) {
                         writer.println(sb.toString());
@@ -137,7 +137,7 @@ public class Main {
                             output = arg + ": not found";
                         }
                     }
-                    
+
                     if (redirectFile != null) {
                         try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile))) {
                             writer.println(output);
@@ -152,14 +152,15 @@ public class Main {
 
                 if (fullPath != null) {
                     List<String> executeArgs = new ArrayList<>();
-                    
-                    // Use a shell execution context wrapper to safely custom-bind argv[0]
-                    executeArgs.add("/bin/sh");
+
+                    // Use bash (not sh/dash) because "exec -a" is a bash-specific
+                    // builtin flag that dash does not support.
+                    executeArgs.add("/bin/bash");
                     executeArgs.add("-c");
                     // 'exec -a' instructs the shell to set the process name ($0) explicitly
-                    executeArgs.add("exec -a \"$0\" \"$@\""); 
-                    executeArgs.add(command);   // This becomes $0 (The expected argv[0] shortname)
-                    executeArgs.add(fullPath);  // This becomes $1 (The actual path to execute)
+                    executeArgs.add("exec -a \"$0\" \"$@\"");
+                    executeArgs.add(command);   // This becomes $0 (the expected argv[0] shortname)
+                    executeArgs.add(fullPath);  // This becomes $1 (the actual path to execute)
 
                     // Inject all remaining command arguments
                     for (int i = 1; i < commandParts.size(); i++) {
