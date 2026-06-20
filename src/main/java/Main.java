@@ -15,13 +15,10 @@ public class Main {
             String input = scanner.nextLine().trim();
             
             if (input.equals("exit")) {
-                System.exit(0);
-            } 
-            else if (input.startsWith("echo ")) {
-                String arguments = input.substring(5);
-                System.out.println(arguments);
-            } 
-            else {
+                break;
+            } else if (input.startsWith("echo ")) {
+                System.out.println(input.substring(5));
+            } else {
                 System.out.println(input + ": command not found");
             }
         }
