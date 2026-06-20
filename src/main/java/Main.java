@@ -24,16 +24,19 @@ public class Main {
                 continue;
             }
             
-            String[] parts = input.split("\\s+");
-            String command = parts[0];
+            List<String> parts = parseArguments(input);
+            if (parts.isEmpty()) {
+                continue;
+            }
+            String command = parts.get(0);
             
             if (command.equals("exit")) {
                 break;
             } else if (command.equals("pwd")) {
                 System.out.println(currentDir);
             } else if (command.equals("cd")) {
-                if (parts.length > 1) {
-                    String targetPath = parts[1];
+                if (parts.size() > 1) {
+                    String targetPath = parts.get(1);
                     String originalTarget = targetPath;
                     
                     if (targetPath.equals("~")) {
@@ -58,14 +61,17 @@ public class Main {
                     }
                 }
             } else if (command.equals("echo")) {
-                if (input.length() > 5) {
-                    System.out.println(input.substring(5));
-                } else {
-                    System.out.println();
+                StringBuilder sb = new StringBuilder();
+                for (int i = 1; i < parts.size(); i++) {
+                    sb.append(parts.get(i));
+                    if (i < parts.size() - 1) {
+                        sb.append(" ");
+                    }
                 }
+                System.out.println(sb.toString());
             } else if (command.equals("type")) {
-                if (parts.length > 1) {
-                    String arg = parts[1];
+                if (parts.size() > 1) {
+                    String arg = parts.get(1);
                     if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
                         System.out.println(arg + " is a shell builtin");
                     } else {
@@ -80,12 +86,7 @@ public class Main {
             } else {
                 String fullPath = getPath(command);
                 if (fullPath != null) {
-                    List<String> commandList = new ArrayList<>();
-                    commandList.add("sh");
-                    commandList.add("-c");
-                    commandList.add(input);
-                    
-                    ProcessBuilder pb = new ProcessBuilder(commandList);
+                    ProcessBuilder pb = new ProcessBuilder(parts);
                     pb.directory(new File(currentDir));
                     pb.inheritIO();
                     Process process = pb.start();
@@ -95,6 +96,37 @@ public class Main {
                 }
             }
         }
+    }
+
+    private static List<String> parseArguments(String input) {
+        List<String> args = new ArrayList<>();
+        StringBuilder currentArg = new StringBuilder();
+        boolean inQuotes = false;
+        boolean hasChars = false;
+
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+
+            if (c == '\'') {
+                inQuotes = !inQuotes;
+                hasChars = true;
+            } else if (Character.isWhitespace(c) && !inQuotes) {
+                if (hasChars || currentArg.length() > 0) {
+                    args.add(currentArg.toString());
+                    currentArg.setLength(0);
+                    hasChars = false;
+                }
+            } else {
+                currentArg.append(c);
+                hasChars = true;
+            }
+        }
+
+        if (hasChars || currentArg.length() > 0) {
+            args.add(currentArg.toString());
+        }
+
+        return args;
     }
 
     private static String getPath(String command) {
