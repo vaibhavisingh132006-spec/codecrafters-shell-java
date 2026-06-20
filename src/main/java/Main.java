@@ -46,10 +46,12 @@ public class Main {
                 
                 if (fullPath != null) {
                     List<String> commandList = new ArrayList<>();
-                    commandList.add(fullPath);
-                    for (int i = 1; i < parts.length; i++) {
-                        commandList.add(parts[i]);
-                    }
+                    // Execute via the system shell so Arg #0 is preserved as the original command name
+                    commandList.add("sh");
+                    commandList.add("-c");
+                    
+                    // Reconstruct the full command string to pass to sh -c
+                    commandList.add(input);
                     
                     ProcessBuilder pb = new ProcessBuilder(commandList);
                     pb.inheritIO();
