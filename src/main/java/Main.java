@@ -122,6 +122,236 @@ public class Main {
         }
     }
 
+    /**
+     * Holds one pipeline segment's command tokens plus any redirects that
+     * were attached to that segment specifically.
+     */
+    private static class CommandSpec {
+        List<String> commandParts;
+        String outFile;
+        boolean appendOut;
+        String errFile;
+        boolean appendErr;
+    }
+
+    /**
+     * Same redirect-token scanning as the single-command path, but
+     * extracted into a reusable form so each pipeline segment can be
+     * parsed independently (e.g. "wc > out.txt" as the last stage of a
+     * pipe still has its own output redirect honored).
+     */
+    private static CommandSpec parseRedirectsForSegment(List<String> tokens) {
+        String outFile = null;
+        String errFile = null;
+        boolean appendOut = false;
+        boolean appendErr = false;
+        int firstRedirectIndex = -1;
+
+        for (int i = 0; i < tokens.size(); i++) {
+            String token = tokens.get(i);
+
+            if (token.equals(">>") || token.equals("1>>")) {
+                if (i + 1 < tokens.size()) {
+                    outFile = tokens.get(i + 1);
+                    appendOut = true;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+                }
+            } else if (token.equals("2>>")) {
+                if (i + 1 < tokens.size()) {
+                    errFile = tokens.get(i + 1);
+                    appendErr = true;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+                }
+            } else if (token.equals(">") || token.equals("1>")) {
+                if (i + 1 < tokens.size()) {
+                    outFile = tokens.get(i + 1);
+                    appendOut = false;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+                }
+            } else if (token.equals("2>")) {
+                if (i + 1 < tokens.size()) {
+                    errFile = tokens.get(i + 1);
+                    appendErr = false;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+                }
+            } else if (token.startsWith("1>>")) {
+                outFile = token.substring(3);
+                appendOut = true;
+                if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+            } else if (token.startsWith(">>")) {
+                outFile = token.substring(2);
+                appendOut = true;
+                if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+            } else if (token.startsWith("2>>")) {
+                errFile = token.substring(3);
+                appendErr = true;
+                if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+            } else if (token.startsWith("2>")) {
+                errFile = token.substring(2);
+                appendErr = false;
+                if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+            } else if (token.startsWith("1>")) {
+                outFile = token.substring(2);
+                appendOut = false;
+                if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+            } else if (token.startsWith(">")) {
+                outFile = token.substring(1);
+                appendOut = false;
+                if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
+            }
+        }
+
+        CommandSpec spec = new CommandSpec();
+        spec.commandParts = (firstRedirectIndex != -1)
+                ? new ArrayList<>(tokens.subList(0, firstRedirectIndex))
+                : tokens;
+        spec.outFile = outFile;
+        spec.appendOut = appendOut;
+        spec.errFile = errFile;
+        spec.appendErr = appendErr;
+        return spec;
+    }
+
+    /** Splits a token list on bare "|" tokens into pipeline segments. */
+    private static List<List<String>> splitOnPipe(List<String> tokens) {
+        List<List<String>> segments = new ArrayList<>();
+        List<String> current = new ArrayList<>();
+        for (String token : tokens) {
+            if (token.equals("|")) {
+                segments.add(current);
+                current = new ArrayList<>();
+            } else {
+                current.add(token);
+            }
+        }
+        segments.add(current);
+        return segments;
+    }
+
+    private static void prepareOutputFile(String path) throws Exception {
+        File file = new File(path);
+        File parent = file.getParentFile();
+        if (parent != null) parent.mkdirs();
+        if (!file.exists()) file.createNewFile();
+    }
+
+    private static void prepareErrorFile(String path, boolean append) throws Exception {
+        File file = new File(path);
+        File parent = file.getParentFile();
+        if (parent != null) parent.mkdirs();
+        if (append) {
+            if (!file.exists()) file.createNewFile();
+        } else {
+            try (PrintWriter writer = new PrintWriter(new FileWriter(path))) {
+                // truncate/create only
+            }
+        }
+    }
+
+    /**
+     * Runs a pipeline of external commands ("cmd1 | cmd2 | ... | cmdN").
+     * Uses ProcessBuilder.startPipeline so the OS wires real pipes between
+     * each adjacent pair of processes (stdout of stage i -> stdin of stage
+     * i+1), exactly like a shell pipeline. Only the first stage's stdin and
+     * the last stage's stdout are configurable here (inherited from the
+     * terminal, or redirected to a file if the last stage has one); every
+     * stage's stderr is inherited unless that stage specifies its own
+     * redirect.
+     *
+     * Foreground pipelines wait for EVERY stage to exit before returning to
+     * the prompt -- this matters for cases like "tail -f file | head -n 5":
+     * head exits after 5 lines, closing its end of the pipe, which causes
+     * the upstream tail to receive SIGPIPE and exit shortly after. Waiting
+     * on all processes (not just the last) ensures the whole pipeline has
+     * actually finished before the next "$ " prompt is shown.
+     */
+    private static void runPipeline(List<String> tokens, String currentDir, boolean runInBackground, String originalInputForJobs) throws Exception {
+        List<List<String>> segments = splitOnPipe(tokens);
+        List<ProcessBuilder> builders = new ArrayList<>();
+
+        for (int idx = 0; idx < segments.size(); idx++) {
+            CommandSpec spec = parseRedirectsForSegment(segments.get(idx));
+
+            if (spec.commandParts.isEmpty()) {
+                System.out.println("syntax error near unexpected token `|'");
+                return;
+            }
+
+            String command = spec.commandParts.get(0);
+            String fullPath = getPath(command);
+            if (fullPath == null) {
+                System.out.println(command + ": command not found");
+                return;
+            }
+
+            List<String> executeArgs = new ArrayList<>();
+            executeArgs.add("/bin/bash");
+            executeArgs.add("-c");
+            executeArgs.add("exec -a \"$0\" \"$@\"");
+            executeArgs.add(command);
+            executeArgs.add(fullPath);
+            for (int i = 1; i < spec.commandParts.size(); i++) {
+                executeArgs.add(spec.commandParts.get(i));
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(executeArgs);
+            pb.directory(new File(currentDir));
+
+            boolean isFirst = (idx == 0);
+            boolean isLast = (idx == segments.size() - 1);
+
+            // Only the first stage's stdin and last stage's stdout need
+            // explicit handling here; startPipeline wires every adjacent
+            // pair together automatically.
+            if (isFirst) {
+                pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+            }
+
+            if (isLast) {
+                if (spec.outFile != null) {
+                    prepareOutputFile(spec.outFile);
+                    pb.redirectOutput(spec.appendOut
+                            ? ProcessBuilder.Redirect.appendTo(new File(spec.outFile))
+                            : ProcessBuilder.Redirect.to(new File(spec.outFile)));
+                } else {
+                    pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                }
+            }
+
+            if (spec.errFile != null) {
+                prepareErrorFile(spec.errFile, spec.appendErr);
+                pb.redirectError(spec.appendErr
+                        ? ProcessBuilder.Redirect.appendTo(new File(spec.errFile))
+                        : ProcessBuilder.Redirect.to(new File(spec.errFile)));
+            } else {
+                pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            }
+
+            builders.add(pb);
+        }
+
+        List<Process> processes = ProcessBuilder.startPipeline(builders);
+
+        if (runInBackground) {
+            // Track the pipeline as one job, represented by its last stage.
+            Process lastProcess = processes.get(processes.size() - 1);
+            int jobNumber = nextJobNumber();
+            long pid = lastProcess.pid();
+            System.out.println("[" + jobNumber + "] " + pid);
+
+            String baseCommand = originalInputForJobs.trim();
+            if (baseCommand.endsWith("&")) {
+                baseCommand = baseCommand.substring(0, baseCommand.length() - 1).trim();
+            }
+            String commandForJob = baseCommand + " &";
+            jobList.add(new Job(jobNumber, pid, commandForJob, baseCommand, lastProcess));
+        } else {
+            for (Process p : processes) {
+                p.waitFor();
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
         String currentDir = System.getProperty("user.dir");
@@ -163,6 +393,15 @@ public class Main {
             }
 
             if (parts.isEmpty()) {
+                continue;
+            }
+
+            // Pipeline detection: if a bare "|" token is present, hand the
+            // whole thing off to the pipeline handler and skip the normal
+            // single-command path entirely (redirect parsing for each
+            // segment happens inside runPipeline()).
+            if (parts.contains("|")) {
+                runPipeline(parts, currentDir, runInBackground, originalInputForJobs);
                 continue;
             }
 
