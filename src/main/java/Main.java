@@ -32,27 +32,54 @@ public class Main {
             }
             
             String redirectFile = null;
-            int redirectIndex = -1;
-            for (int i = 0; i < parts.size(); i++) {
-                String token = parts.get(i);
-                if (token.equals(">") || token.equals("1>")) {
-                    if (i + 1 < parts.size()) {
-                        redirectFile = parts.get(i + 1);
-                        redirectIndex = i;
-                        break;
-                    }
-                }
-            }
-            
-            List<String> commandParts = parts;
-            if (redirectIndex != -1) {
-                commandParts = new ArrayList<>(parts.subList(0, redirectIndex));
-                File file = new File(redirectFile);
-                File parent = file.getParentFile();
-                if (parent != null) {
-                    parent.mkdirs();
-                }
-            }
+int redirectIndex = -1;
+
+for (int i = 0; i < parts.size(); i++) {
+
+    String token = parts.get(i);
+
+    if (token.equals(">") || token.equals("1>")) {
+
+        if (i + 1 < parts.size()) {
+
+            redirectFile = parts.get(i + 1);
+            redirectIndex = i;
+            break;
+        }
+
+    } else if (token.startsWith("1>")) {
+
+        redirectFile = token.substring(2);
+        redirectIndex = i;
+        break;
+
+    } else if (token.startsWith(">")) {
+
+        redirectFile = token.substring(1);
+        redirectIndex = i;
+        break;
+    }
+}
+
+List<String> commandParts;
+
+if (redirectIndex != -1) {
+
+    commandParts =
+            new ArrayList<>(parts.subList(0, redirectIndex));
+
+    File file = new File(redirectFile);
+
+    File parent = file.getParentFile();
+
+    if (parent != null) {
+        parent.mkdirs();
+    }
+
+} else {
+
+    commandParts = parts;
+}
             
             if (commandParts.isEmpty()) {
                 continue;
@@ -134,28 +161,47 @@ public class Main {
                         System.out.println(output);
                     }
                 }
-            } else {
-                String fullPath = getPath(command);
-                if (fullPath != null) {
-                    List<String> executeArgs = new ArrayList<>(commandParts);
-                    executeArgs.set(0, fullPath);
-                    
-                    ProcessBuilder pb = new ProcessBuilder(executeArgs);
-                    pb.directory(new File(currentDir));
-                    
-                    if (redirectFile != null) {
-                        pb.redirectOutput(new File(redirectFile));
-                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
-                    } else {
-                        pb.inheritIO();
-                    }
-                    
-                    Process process = pb.start();
-                    process.waitFor();
-                } else {
-                    System.out.println(command + ": command not found");
-                }
-            }
+            } } else {
+
+    String fullPath = getPath(command);
+
+    if (fullPath != null) {
+
+        List<String> executeArgs = new ArrayList<>();
+
+        executeArgs.add(fullPath);
+
+        for (int i = 1; i < commandParts.size(); i++) {
+            executeArgs.add(commandParts.get(i));
+        }
+
+        ProcessBuilder pb = new ProcessBuilder(executeArgs);
+
+        pb.directory(new File(currentDir));
+
+        // Preserve argv[0]
+        pb.environment().put("ARGV0", command);
+
+        if (redirectFile != null) {
+
+            pb.redirectOutput(new File(redirectFile));
+
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+        } else {
+
+            pb.inheritIO();
+        }
+
+        Process process = pb.start();
+
+        process.waitFor();
+
+    } else {
+
+        System.out.println(command + ": command not found");
+    }
+}
         }
     }
 
