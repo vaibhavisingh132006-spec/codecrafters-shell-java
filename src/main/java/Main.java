@@ -33,14 +33,24 @@ public class Main {
 
             String redirectFile = null;
             String stderrFile = null;
+            boolean appendStdout = false;
             int firstRedirectIndex = -1;
 
             for (int i = 0; i < parts.size(); i++) {
                 String token = parts.get(i);
 
-                if (token.equals(">") || token.equals("1>")) {
+                if (token.equals(">>") || token.equals("1>>")) {
                     if (i + 1 < parts.size()) {
                         redirectFile = parts.get(i + 1);
+                        appendStdout = true;
+                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                            firstRedirectIndex = i;
+                        }
+                    }
+                } else if (token.equals(">") || token.equals("1>")) {
+                    if (i + 1 < parts.size()) {
+                        redirectFile = parts.get(i + 1);
+                        appendStdout = false;
                         if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
                             firstRedirectIndex = i;
                         }
@@ -52,6 +62,18 @@ public class Main {
                             firstRedirectIndex = i;
                         }
                     }
+                } else if (token.startsWith("1>>")) {
+                    redirectFile = token.substring(3);
+                    appendStdout = true;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                        firstRedirectIndex = i;
+                    }
+                } else if (token.startsWith(">>")) {
+                    redirectFile = token.substring(2);
+                    appendStdout = true;
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
+                        firstRedirectIndex = i;
+                    }
                 } else if (token.startsWith("2>")) {
                     stderrFile = token.substring(2);
                     if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
@@ -59,11 +81,13 @@ public class Main {
                     }
                 } else if (token.startsWith("1>")) {
                     redirectFile = token.substring(2);
+                    appendStdout = false;
                     if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
                         firstRedirectIndex = i;
                     }
                 } else if (token.startsWith(">")) {
                     redirectFile = token.substring(1);
+                    appendStdout = false;
                     if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
                         firstRedirectIndex = i;
                     }
@@ -82,6 +106,9 @@ public class Main {
                 File parent = file.getParentFile();
                 if (parent != null) {
                     parent.mkdirs();
+                }
+                if (!file.exists()) {
+                    file.createNewFile();
                 }
             }
             if (stderrFile != null) {
@@ -107,7 +134,7 @@ public class Main {
                 break;
             } else if (command.equals("pwd")) {
                 if (redirectFile != null) {
-                    try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile))) {
+                    try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile, appendStdout))) {
                         writer.println(currentDir);
                     }
                 } else {
@@ -149,7 +176,7 @@ public class Main {
                 }
 
                 if (redirectFile != null) {
-                    try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile))) {
+                    try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile, appendStdout))) {
                         writer.println(sb.toString());
                     }
                 } else {
@@ -171,7 +198,7 @@ public class Main {
                     }
 
                     if (redirectFile != null) {
-                        try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile))) {
+                        try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile, appendStdout))) {
                             writer.println(output);
                         }
                     } else {
@@ -203,7 +230,11 @@ public class Main {
                     pb.directory(new File(currentDir));
 
                     if (redirectFile != null) {
-                        pb.redirectOutput(new File(redirectFile));
+                        if (appendStdout) {
+                            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(redirectFile)));
+                        } else {
+                            pb.redirectOutput(ProcessBuilder.Redirect.to(new File(redirectFile)));
+                        }
                     } else {
                         pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                     }
