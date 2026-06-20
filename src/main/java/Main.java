@@ -16,13 +16,17 @@ public class Main {
         int jobNumber;
         long pid;
         String commandString;
+        String baseCommandString;
         String status;
+        Process process;
 
-        Job(int jobNumber, long pid, String commandString, String status) {
+        Job(int jobNumber, long pid, String commandString, String baseCommandString, String status, Process process) {
             this.jobNumber = jobNumber;
             this.pid = pid;
             this.commandString = commandString;
+            this.baseCommandString = baseCommandString;
             this.status = status;
+            this.process = process;
         }
     }
 
@@ -267,6 +271,7 @@ public class Main {
             } else if (command.equals("jobs")) {
                 int lastIndex = jobList.size() - 1;
                 int secondLastIndex = jobList.size() - 2;
+                List<Job> toRemove = new ArrayList<>();
                 for (int i = 0; i < jobList.size(); i++) {
                     Job job = jobList.get(i);
                     String marker;
@@ -277,10 +282,20 @@ public class Main {
                     } else {
                         marker = " ";
                     }
-                    String statusPadded = String.format("%-24s", job.status);
-                    String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.commandString;
+
+                    boolean finished = !job.process.isAlive();
+                    String displayStatus = finished ? "Done" : "Running";
+                    String displayCommand = finished ? job.baseCommandString : job.commandString;
+
+                    String statusPadded = String.format("%-24s", displayStatus);
+                    String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + displayCommand;
                     System.out.println(line);
+
+                    if (finished) {
+                        toRemove.add(job);
+                    }
                 }
+                jobList.removeAll(toRemove);
             } else {
                 String fullPath = getPath(command);
 
@@ -332,11 +347,12 @@ public class Main {
                         long pid = process.pid();
                         System.out.println("[" + jobCounter + "] " + pid);
 
-                        String commandForJob = originalInputForJobs.trim();
-                        if (!commandForJob.endsWith("&")) {
-                            commandForJob = commandForJob + " &";
+                        String baseCommand = originalInputForJobs.trim();
+                        if (baseCommand.endsWith("&")) {
+                            baseCommand = baseCommand.substring(0, baseCommand.length() - 1).trim();
                         }
-                        jobList.add(new Job(jobCounter, pid, commandForJob, "Running"));
+                        String commandForJob = baseCommand + " &";
+                        jobList.add(new Job(jobCounter, pid, commandForJob, baseCommand, "Running", process));
                     } else {
                         process.waitFor();
                     }
