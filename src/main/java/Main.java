@@ -14,12 +14,16 @@ public class Main {
             
             String input = scanner.nextLine().trim();
             
-            // Check if the command is exactly "exit"
             if (input.equals("exit")) {
-                System.exit(0); // Forces the JVM to shutdown instantly
+                System.exit(0);
+            } 
+            else if (input.startsWith("echo ")) {
+                String arguments = input.substring(5);
+                System.out.println(arguments);
+            } 
+            else {
+                System.out.println(input + ": command not found");
             }
-            
-            System.out.println(input + ": command not found");
         }
     }
 }
