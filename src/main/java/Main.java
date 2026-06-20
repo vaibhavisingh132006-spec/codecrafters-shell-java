@@ -101,16 +101,20 @@ public class Main {
     private static List<String> parseArguments(String input) {
         List<String> args = new ArrayList<>();
         StringBuilder currentArg = new StringBuilder();
-        boolean inQuotes = false;
+        boolean inSingleQuotes = false;
+        boolean inDoubleQuotes = false;
         boolean tokenStarted = false;
 
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
 
-            if (c == '\'') {
-                inQuotes = !inQuotes;
+            if (c == '\'' && !inDoubleQuotes) {
+                inSingleQuotes = !inSingleQuotes;
                 tokenStarted = true;
-            } else if (Character.isWhitespace(c) && !inQuotes) {
+            } else if (c == '"' && !inSingleQuotes) {
+                inDoubleQuotes = !inDoubleQuotes;
+                tokenStarted = true;
+            } else if (Character.isWhitespace(c) && !inSingleQuotes && !inDoubleQuotes) {
                 if (tokenStarted) {
                     args.add(currentArg.toString());
                     currentArg.setLength(0);
