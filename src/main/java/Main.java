@@ -10,6 +10,21 @@ import java.util.List;
 
 public class Main {
     private static int jobCounter = 0;
+    private static final List<Job> jobList = new ArrayList<>();
+
+    private static class Job {
+        int jobNumber;
+        long pid;
+        String commandString;
+        String status;
+
+        Job(int jobNumber, long pid, String commandString, String status) {
+            this.jobNumber = jobNumber;
+            this.pid = pid;
+            this.commandString = commandString;
+            this.status = status;
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
@@ -32,6 +47,8 @@ public class Main {
             if (parts.isEmpty()) {
                 continue;
             }
+
+            String originalInputForJobs = input;
 
             // Check for background execution token "&" as the last token.
             // Handle both a standalone "&" token and a token that merely
@@ -248,8 +265,14 @@ public class Main {
                     }
                 }
             } else if (command.equals("jobs")) {
-                // Empty implementation for now: no background jobs are
-                // tracked yet, so this intentionally produces no output.
+                for (int i = 0; i < jobList.size(); i++) {
+                    Job job = jobList.get(i);
+                    boolean isMostRecent = (i == jobList.size() - 1);
+                    String marker = isMostRecent ? "+" : "-";
+                    String statusPadded = String.format("%-24s", job.status);
+                    String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.commandString;
+                    System.out.println(line);
+                }
             } else {
                 String fullPath = getPath(command);
 
@@ -298,7 +321,14 @@ public class Main {
                         // number and PID, then immediately return to the
                         // prompt loop.
                         jobCounter++;
-                        System.out.println("[" + jobCounter + "] " + process.pid());
+                        long pid = process.pid();
+                        System.out.println("[" + jobCounter + "] " + pid);
+
+                        String commandForJob = originalInputForJobs.trim();
+                        if (!commandForJob.endsWith("&")) {
+                            commandForJob = commandForJob + " &";
+                        }
+                        jobList.add(new Job(jobCounter, pid, commandForJob, "Running"));
                     } else {
                         process.waitFor();
                     }
