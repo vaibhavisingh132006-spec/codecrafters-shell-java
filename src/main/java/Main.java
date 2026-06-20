@@ -135,14 +135,10 @@ public class Main {
                     parent.mkdirs();
                 }
                 if (appendStderr) {
-                    // Append mode: just ensure the file exists, never clear it.
                     if (!file.exists()) {
                         file.createNewFile();
                     }
                 } else {
-                    // Truncate mode: create/clear the file even if nothing is
-                    // ever written to it (builtins like echo/pwd/type never
-                    // write stderr today, but the file must still exist).
                     try (PrintWriter writer = new PrintWriter(new FileWriter(stderrFile))) {
                         // truncate/create only
                     }
@@ -230,22 +226,17 @@ public class Main {
                     }
                 }
             } else {
-                // External Command Execution Block
                 String fullPath = getPath(command);
 
                 if (fullPath != null) {
                     List<String> executeArgs = new ArrayList<>();
 
-                    // Use bash (not sh/dash) because "exec -a" is a bash-specific
-                    // builtin flag that dash does not support.
                     executeArgs.add("/bin/bash");
                     executeArgs.add("-c");
-                    // 'exec -a' instructs the shell to set the process name ($0) explicitly
                     executeArgs.add("exec -a \"$0\" \"$@\"");
-                    executeArgs.add(command);   // This becomes $0 (the expected argv[0] shortname)
-                    executeArgs.add(fullPath);  // This becomes $1 (the actual path to execute)
+                    executeArgs.add(command);
+                    executeArgs.add(fullPath);
 
-                    // Inject all remaining command arguments
                     for (int i = 1; i < commandParts.size(); i++) {
                         executeArgs.add(commandParts.get(i));
                     }
