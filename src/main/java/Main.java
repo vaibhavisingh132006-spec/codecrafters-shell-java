@@ -113,4 +113,44 @@ public class Main {
                 currentArg.append(c);
                 tokenStarted = true;
                 isEscaped = false;
-            } else if (c == '\\'
+            } else if (c == '\\' && !inSingleQuotes && !inDoubleQuotes) {
+                isEscaped = true;
+            } else if (c == '\'' && !inDoubleQuotes) {
+                inSingleQuotes = !inSingleQuotes;
+                tokenStarted = true;
+            } else if (c == '"' && !inSingleQuotes) {
+                inDoubleQuotes = !inDoubleQuotes;
+                tokenStarted = true;
+            } else if (Character.isWhitespace(c) && !inSingleQuotes && !inDoubleQuotes) {
+                if (tokenStarted) {
+                    args.add(currentArg.toString());
+                    currentArg.setLength(0);
+                    tokenStarted = false;
+                }
+            } else {
+                currentArg.append(c);
+                tokenStarted = true;
+            }
+        }
+
+        if (tokenStarted) {
+            args.add(currentArg.toString());
+        }
+
+        return args;
+    }
+
+    private static String getPath(String command) {
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv != null) {
+            String[] directories = pathEnv.split(File.pathSeparator);
+            for (String dir : directories) {
+                Path fullPath = Paths.get(dir, command);
+                if (Files.isExecutable(fullPath)) {
+                    return fullPath.toString();
+                }
+            }
+        }
+        return null;
+    }
+}
