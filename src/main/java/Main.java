@@ -17,41 +17,75 @@ public class Main {
         long pid;
         String commandString;
         String baseCommandString;
-        String status;
         Process process;
 
-        Job(int jobNumber, long pid, String commandString, String baseCommandString, String status, Process process) {
+        Job(int jobNumber, long pid, String commandString, String baseCommandString, Process process) {
             this.jobNumber = jobNumber;
             this.pid = pid;
             this.commandString = commandString;
             this.baseCommandString = baseCommandString;
-            this.status = status;
             this.process = process;
         }
     }
 
+    /**
+     * Returns the marker ('+', '-', or ' ') for the job at the given index,
+     * based on a snapshot of jobList. The LAST job in insertion order is the
+     * "current" job ('+'), the SECOND-TO-LAST is the "previous" job ('-').
+     * Both reapJobs() and the jobs builtin call this so markers are always
+     * computed the exact same way.
+     */
+    private static String markerFor(int index, int size) {
+        if (index == size - 1) {
+            return "+";
+        } else if (index == size - 2) {
+            return "-";
+        } else {
+            return " ";
+        }
+    }
+
+    /**
+     * Shared reaping logic. Checks every job in the table; for any whose
+     * process has exited, prints a single "Done" line (marker computed from
+     * the CURRENT snapshot of jobList, before removal) and queues it for
+     * removal. Removal happens after the scan so markers for all jobs in
+     * this pass are computed consistently. Called both before every prompt
+     * and at the start of the jobs builtin, so a job's Done line is only
+     * ever printed once, from whichever call sees it exit first.
+     */
     private static void reapJobs() {
-        int lastIndex = jobList.size() - 1;
-        int secondLastIndex = jobList.size() - 2;
+        int size = jobList.size();
         List<Job> toRemove = new ArrayList<>();
-        for (int i = 0; i < jobList.size(); i++) {
+
+        for (int i = 0; i < size; i++) {
             Job job = jobList.get(i);
             if (!job.process.isAlive()) {
-                String marker;
-                if (i == lastIndex) {
-                    marker = "+";
-                } else if (i == secondLastIndex) {
-                    marker = "-";
-                } else {
-                    marker = " ";
-                }
+                String marker = markerFor(i, size);
                 String statusPadded = String.format("%-24s", "Done");
-                String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.baseCommandString;
-                System.out.println(line);
+                System.out.println("[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.baseCommandString);
                 toRemove.add(job);
             }
         }
-        jobList.removeAll(toRemove);
+
+        if (!toRemove.isEmpty()) {
+            jobList.removeAll(toRemove);
+        }
+    }
+
+    private static void printJobsList() {
+        // Reap first so the listing never shows an already-exited job,
+        // and so any newly-completed job is reported here exactly once
+        // if this is the first place to notice it.
+        reapJobs();
+
+        int size = jobList.size();
+        for (int i = 0; i < size; i++) {
+            Job job = jobList.get(i);
+            String marker = markerFor(i, size);
+            String statusPadded = String.format("%-24s", "Running");
+            System.out.println("[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.commandString);
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -59,6 +93,8 @@ public class Main {
         String currentDir = System.getProperty("user.dir");
 
         while (true) {
+            // Reap before every prompt: foreground command, builtin,
+            // background launch, or even empty input all loop back here.
             reapJobs();
 
             System.out.print("$ ");
@@ -80,10 +116,6 @@ public class Main {
 
             String originalInputForJobs = input;
 
-            // Check for background execution token "&" as the last token.
-            // Handle both a standalone "&" token and a token that merely
-            // ends with "&" (e.g. if parsing ever glues it to the prior
-            // token), so background detection is robust either way.
             boolean runInBackground = false;
             if (!parts.isEmpty()) {
                 String lastToken = parts.get(parts.size() - 1);
@@ -113,70 +145,50 @@ public class Main {
                     if (i + 1 < parts.size()) {
                         redirectFile = parts.get(i + 1);
                         appendStdout = true;
-                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                            firstRedirectIndex = i;
-                        }
+                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                     }
                 } else if (token.equals("2>>")) {
                     if (i + 1 < parts.size()) {
                         stderrFile = parts.get(i + 1);
                         appendStderr = true;
-                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                            firstRedirectIndex = i;
-                        }
+                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                     }
                 } else if (token.equals(">") || token.equals("1>")) {
                     if (i + 1 < parts.size()) {
                         redirectFile = parts.get(i + 1);
                         appendStdout = false;
-                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                            firstRedirectIndex = i;
-                        }
+                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                     }
                 } else if (token.equals("2>")) {
                     if (i + 1 < parts.size()) {
                         stderrFile = parts.get(i + 1);
                         appendStderr = false;
-                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                            firstRedirectIndex = i;
-                        }
+                        if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                     }
                 } else if (token.startsWith("1>>")) {
                     redirectFile = token.substring(3);
                     appendStdout = true;
-                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                        firstRedirectIndex = i;
-                    }
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                 } else if (token.startsWith(">>")) {
                     redirectFile = token.substring(2);
                     appendStdout = true;
-                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                        firstRedirectIndex = i;
-                    }
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                 } else if (token.startsWith("2>>")) {
                     stderrFile = token.substring(3);
                     appendStderr = true;
-                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                        firstRedirectIndex = i;
-                    }
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                 } else if (token.startsWith("2>")) {
                     stderrFile = token.substring(2);
                     appendStderr = false;
-                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                        firstRedirectIndex = i;
-                    }
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                 } else if (token.startsWith("1>")) {
                     redirectFile = token.substring(2);
                     appendStdout = false;
-                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                        firstRedirectIndex = i;
-                    }
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                 } else if (token.startsWith(">")) {
                     redirectFile = token.substring(1);
                     appendStdout = false;
-                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) {
-                        firstRedirectIndex = i;
-                    }
+                    if (firstRedirectIndex == -1 || i < firstRedirectIndex) firstRedirectIndex = i;
                 }
             }
 
@@ -190,23 +202,15 @@ public class Main {
             if (redirectFile != null) {
                 File file = new File(redirectFile);
                 File parent = file.getParentFile();
-                if (parent != null) {
-                    parent.mkdirs();
-                }
-                if (!file.exists()) {
-                    file.createNewFile();
-                }
+                if (parent != null) parent.mkdirs();
+                if (!file.exists()) file.createNewFile();
             }
             if (stderrFile != null) {
                 File file = new File(stderrFile);
                 File parent = file.getParentFile();
-                if (parent != null) {
-                    parent.mkdirs();
-                }
+                if (parent != null) parent.mkdirs();
                 if (appendStderr) {
-                    if (!file.exists()) {
-                        file.createNewFile();
-                    }
+                    if (!file.exists()) file.createNewFile();
                 } else {
                     try (PrintWriter writer = new PrintWriter(new FileWriter(stderrFile))) {
                         // truncate/create only
@@ -236,9 +240,7 @@ public class Main {
 
                     if (targetPath.equals("~")) {
                         String homeEnv = System.getenv("HOME");
-                        if (homeEnv != null) {
-                            targetPath = homeEnv;
-                        }
+                        if (homeEnv != null) targetPath = homeEnv;
                     }
 
                     try {
@@ -259,9 +261,7 @@ public class Main {
                 StringBuilder sb = new StringBuilder();
                 for (int i = 1; i < commandParts.size(); i++) {
                     sb.append(commandParts.get(i));
-                    if (i < commandParts.size() - 1) {
-                        sb.append(" ");
-                    }
+                    if (i < commandParts.size() - 1) sb.append(" ");
                 }
 
                 if (redirectFile != null) {
@@ -279,11 +279,7 @@ public class Main {
                         output = arg + " is a shell builtin";
                     } else {
                         String fullPath = getPath(arg);
-                        if (fullPath != null) {
-                            output = arg + " is " + fullPath;
-                        } else {
-                            output = arg + ": not found";
-                        }
+                        output = (fullPath != null) ? (arg + " is " + fullPath) : (arg + ": not found");
                     }
 
                     if (redirectFile != null) {
@@ -295,29 +291,12 @@ public class Main {
                     }
                 }
             } else if (command.equals("jobs")) {
-                reapJobs();
-                int lastIndex = jobList.size() - 1;
-                int secondLastIndex = jobList.size() - 2;
-                for (int i = 0; i < jobList.size(); i++) {
-                    Job job = jobList.get(i);
-                    String marker;
-                    if (i == lastIndex) {
-                        marker = "+";
-                    } else if (i == secondLastIndex) {
-                        marker = "-";
-                    } else {
-                        marker = " ";
-                    }
-                    String statusPadded = String.format("%-24s", "Running");
-                    String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.commandString;
-                    System.out.println(line);
-                }
+                printJobsList();
             } else {
                 String fullPath = getPath(command);
 
                 if (fullPath != null) {
                     List<String> executeArgs = new ArrayList<>();
-
                     executeArgs.add("/bin/bash");
                     executeArgs.add("-c");
                     executeArgs.add("exec -a \"$0\" \"$@\"");
@@ -332,21 +311,17 @@ public class Main {
                     pb.directory(new File(currentDir));
 
                     if (redirectFile != null) {
-                        if (appendStdout) {
-                            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(redirectFile)));
-                        } else {
-                            pb.redirectOutput(ProcessBuilder.Redirect.to(new File(redirectFile)));
-                        }
+                        pb.redirectOutput(appendStdout
+                                ? ProcessBuilder.Redirect.appendTo(new File(redirectFile))
+                                : ProcessBuilder.Redirect.to(new File(redirectFile)));
                     } else {
                         pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                     }
 
                     if (stderrFile != null) {
-                        if (appendStderr) {
-                            pb.redirectError(ProcessBuilder.Redirect.appendTo(new File(stderrFile)));
-                        } else {
-                            pb.redirectError(ProcessBuilder.Redirect.to(new File(stderrFile)));
-                        }
+                        pb.redirectError(appendStderr
+                                ? ProcessBuilder.Redirect.appendTo(new File(stderrFile))
+                                : ProcessBuilder.Redirect.to(new File(stderrFile)));
                     } else {
                         pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                     }
@@ -356,9 +331,6 @@ public class Main {
                     Process process = pb.start();
 
                     if (runInBackground) {
-                        // Don't wait for the process to finish; print job
-                        // number and PID, then immediately return to the
-                        // prompt loop.
                         jobCounter++;
                         long pid = process.pid();
                         System.out.println("[" + jobCounter + "] " + pid);
@@ -368,7 +340,7 @@ public class Main {
                             baseCommand = baseCommand.substring(0, baseCommand.length() - 1).trim();
                         }
                         String commandForJob = baseCommand + " &";
-                        jobList.add(new Job(jobCounter, pid, commandForJob, baseCommand, "Running", process));
+                        jobList.add(new Job(jobCounter, pid, commandForJob, baseCommand, process));
                     } else {
                         process.waitFor();
                     }
