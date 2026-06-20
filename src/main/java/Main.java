@@ -153,19 +153,21 @@ public class Main {
                 if (fullPath != null) {
                     List<String> executeArgs = new ArrayList<>();
                     
-                    // CRITICAL FIX: Pass the raw, original command name as argv[0]
-                    executeArgs.add(command);
+                    // Use a shell execution context wrapper to safely custom-bind argv[0]
+                    executeArgs.add("/bin/sh");
+                    executeArgs.add("-c");
+                    // 'exec -a' instructs the shell to set the process name ($0) explicitly
+                    executeArgs.add("exec -a \"$0\" \"$@\""); 
+                    executeArgs.add(command);   // This becomes $0 (The expected argv[0] shortname)
+                    executeArgs.add(fullPath);  // This becomes $1 (The actual path to execute)
 
+                    // Inject all remaining command arguments
                     for (int i = 1; i < commandParts.size(); i++) {
                         executeArgs.add(commandParts.get(i));
                     }
 
                     ProcessBuilder pb = new ProcessBuilder(executeArgs);
                     pb.directory(new File(currentDir));
-                    
-                    // CRITICAL FIX: Tell ProcessBuilder to resolve and execute the binary 
-                    // via fullPath, independent of what we named argv[0] above.
-                    pb.command().set(0, fullPath);
 
                     if (redirectFile != null) {
                         pb.redirectOutput(new File(redirectFile));
