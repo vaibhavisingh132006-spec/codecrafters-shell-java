@@ -1,4 +1,6 @@
 import java.io.File;
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -28,15 +30,50 @@ public class Main {
             if (parts.isEmpty()) {
                 continue;
             }
-            String command = parts.get(0);
             
+            // Look for redirection operators > or 1>
+            String redirectFile = null;
+            int redirectIndex = -1;
+            for (int i = 0; i < parts.size(); i++) {
+                String token = parts.get(i);
+                if (token.equals(">") || token.equals("1>")) {
+                    if (i + 1 < parts.size()) {
+                        redirectFile = parts.get(i + 1);
+                        redirectIndex = i;
+                        break;
+                    }
+                }
+            }
+            
+            // If redirection exists, extract the command parts and ensure the parent directory exists
+            List<String> commandParts = parts;
+            if (redirectIndex != -1) {
+                commandParts = new ArrayList<>(parts.subList(0, redirectIndex));
+                File file = new File(redirectFile);
+                if (file.getParentFile() != null) {
+                    file.getParentFile().mkdirs();
+                }
+            }
+            
+            if (commandParts.isEmpty()) {
+                continue;
+            }
+            String command = commandParts.get(0);
+            
+            // Execute built-ins or external commands
             if (command.equals("exit")) {
                 break;
             } else if (command.equals("pwd")) {
-                System.out.println(currentDir);
+                if (redirectFile != null) {
+                    try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile))) {
+                        writer.println(currentDir);
+                    }
+                } else {
+                    System.out.println(currentDir);
+                }
             } else if (command.equals("cd")) {
-                if (parts.size() > 1) {
-                    String targetPath = parts.get(1);
+                if (commandParts.size() > 1) {
+                    String targetPath = commandParts.get(1);
                     String originalTarget = targetPath;
                     
                     if (targetPath.equals("~")) {
@@ -62,33 +99,57 @@ public class Main {
                 }
             } else if (command.equals("echo")) {
                 StringBuilder sb = new StringBuilder();
-                for (int i = 1; i < parts.size(); i++) {
-                    sb.append(parts.get(i));
-                    if (i < parts.size() - 1) {
+                for (int i = 1; i < commandParts.size(); i++) {
+                    sb.append(commandParts.get(i));
+                    if (i < commandParts.size() - 1) {
                         sb.append(" ");
                     }
                 }
-                System.out.println(sb.toString());
+                
+                if (redirectFile != null) {
+                    try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile))) {
+                        writer.println(sb.toString());
+                    }
+                } else {
+                    System.out.println(sb.toString());
+                }
             } else if (command.equals("type")) {
-                if (parts.size() > 1) {
-                    String arg = parts.get(1);
+                if (commandParts.size() > 1) {
+                    String arg = commandParts.get(1);
+                    String output;
                     if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
-                        System.out.println(arg + " is a shell builtin");
+                        output = arg + " is a shell builtin";
                     } else {
                         String fullPath = getPath(arg);
                         if (fullPath != null) {
-                            System.out.println(arg + " is " + fullPath);
+                            output = arg + " is " + fullPath;
                         } else {
-                            System.out.println(arg + ": not found");
+                            output = arg + ": not found";
                         }
+                    }
+                    
+                    if (redirectFile != null) {
+                        try (PrintWriter writer = new PrintWriter(new FileWriter(redirectFile))) {
+                            writer.println(output);
+                        }
+                    } else {
+                        System.out.println(output);
                     }
                 }
             } else {
                 String fullPath = getPath(command);
                 if (fullPath != null) {
-                    ProcessBuilder pb = new ProcessBuilder(parts);
+                    commandParts.set(0, fullPath);
+                    ProcessBuilder pb = new ProcessBuilder(commandParts);
                     pb.directory(new File(currentDir));
-                    pb.inheritIO();
+                    
+                    if (redirectFile != null) {
+                        pb.redirectOutput(new File(redirectFile));
+                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                    } else {
+                        pb.inheritIO();
+                    }
+                    
                     Process process = pb.start();
                     process.waitFor();
                 } else {
