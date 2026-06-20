@@ -73,18 +73,36 @@ public class Main {
         }
     }
 
+    /**
+     * The jobs builtin. Takes ONE snapshot of the job table (fixed size),
+     * computes each job's marker from that snapshot, and prints every job's
+     * line (Done or Running) in its original table position, in a single
+     * pass. This is important: if we reaped first and then recomputed
+     * markers against the now-shrunk list, jobs that were never "+"/"-"
+     * candidates could wrongly inherit a marker just because the list got
+     * smaller. Removal of newly-completed jobs happens only after all
+     * lines for this snapshot have been printed.
+     */
     private static void printJobsList() {
-        // Reap first so the listing never shows an already-exited job,
-        // and so any newly-completed job is reported here exactly once
-        // if this is the first place to notice it.
-        reapJobs();
-
         int size = jobList.size();
+        List<Job> toRemove = new ArrayList<>();
+
         for (int i = 0; i < size; i++) {
             Job job = jobList.get(i);
             String marker = markerFor(i, size);
-            String statusPadded = String.format("%-24s", "Running");
-            System.out.println("[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.commandString);
+
+            if (!job.process.isAlive()) {
+                String statusPadded = String.format("%-24s", "Done");
+                System.out.println("[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.baseCommandString);
+                toRemove.add(job);
+            } else {
+                String statusPadded = String.format("%-24s", "Running");
+                System.out.println("[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.commandString);
+            }
+        }
+
+        if (!toRemove.isEmpty()) {
+            jobList.removeAll(toRemove);
         }
     }
 
