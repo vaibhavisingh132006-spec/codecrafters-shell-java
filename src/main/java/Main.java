@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Main {
+    private static int jobCounter = 0;
+
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
         String currentDir = System.getProperty("user.dir");
@@ -27,6 +29,17 @@ public class Main {
             }
 
             List<String> parts = parseArguments(input);
+            if (parts.isEmpty()) {
+                continue;
+            }
+
+            // Check for background execution token "&" as the last token
+            boolean runInBackground = false;
+            if (!parts.isEmpty() && parts.get(parts.size() - 1).equals("&")) {
+                runInBackground = true;
+                parts.remove(parts.size() - 1);
+            }
+
             if (parts.isEmpty()) {
                 continue;
             }
@@ -270,7 +283,16 @@ public class Main {
                     pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
 
                     Process process = pb.start();
-                    process.waitFor();
+
+                    if (runInBackground) {
+                        // Don't wait for the process to finish; print job
+                        // number and PID, then immediately return to the
+                        // prompt loop.
+                        jobCounter++;
+                        System.out.println("[" + jobCounter + "] " + process.pid());
+                    } else {
+                        process.waitFor();
+                    }
                 } else {
                     System.out.println(command + ": command not found");
                 }
