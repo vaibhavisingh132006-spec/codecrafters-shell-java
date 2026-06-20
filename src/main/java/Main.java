@@ -9,6 +9,7 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
+        String currentDir = System.getProperty("user.dir");
         
         while (true) {
             System.out.print("$ ");
@@ -26,12 +27,20 @@ public class Main {
             if (input.equals("exit")) {
                 break;
             } else if (input.equals("pwd")) {
-                System.out.println(System.getProperty("user.dir"));
+                System.out.println(currentDir);
+            } else if (input.startsWith("cd ")) {
+                String targetPath = input.substring(3).trim();
+                File targetDir = new File(targetPath);
+                if (targetDir.exists() && targetDir.isDirectory()) {
+                    currentDir = targetDir.getAbsolutePath();
+                } else {
+                    System.out.println("cd: " + targetPath + ": No such file or directory");
+                }
             } else if (input.startsWith("echo ")) {
                 System.out.println(input.substring(5));
             } else if (input.startsWith("type ")) {
                 String arg = input.substring(5).trim();
-                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd")) {
+                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
                     System.out.println(arg + " is a shell builtin");
                 } else {
                     String fullPath = getPath(arg);
@@ -53,6 +62,7 @@ public class Main {
                     commandList.add(input);
                     
                     ProcessBuilder pb = new ProcessBuilder(commandList);
+                    pb.directory(new File(currentDir));
                     pb.inheritIO();
                     Process process = pb.start();
                     process.waitFor();
