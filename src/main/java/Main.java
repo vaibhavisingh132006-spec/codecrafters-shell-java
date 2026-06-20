@@ -56,7 +56,7 @@ public class Main {
                     Process process = pb.start();
                     process.waitFor();
                 } else {
-                    System.out.println(input + ": command not found");
+                    System.out.println(command + ": command not found");
                 }
             }
         }
