@@ -34,6 +34,7 @@ public class Main {
             } else if (command.equals("cd")) {
                 if (parts.length > 1) {
                     String targetPath = parts[1];
+                    String originalTarget = targetPath;
                     
                     if (targetPath.equals("~")) {
                         String homeEnv = System.getenv("HOME");
@@ -50,10 +51,10 @@ public class Main {
                         if (targetDir.exists() && targetDir.isDirectory()) {
                             currentDir = resolvedPath.toString();
                         } else {
-                            System.out.println("cd: " + parts[1] + ": No such file or directory");
+                            System.out.println("cd: " + originalTarget + ": No such file or directory");
                         }
                     } catch (Exception e) {
-                        System.out.println("cd: " + parts[1] + ": No such file or directory");
+                        System.out.println("cd: " + originalTarget + ": No such file or directory");
                     }
                 }
             } else if (command.equals("echo")) {
