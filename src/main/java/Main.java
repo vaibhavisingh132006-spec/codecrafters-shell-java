@@ -34,9 +34,12 @@ public class Main {
             } else if (command.equals("cd")) {
                 if (parts.length > 1) {
                     String targetPath = parts[1];
-                    File targetDir = new File(targetPath);
+                    Path basePat = Paths.get(currentDir);
+                    Path resolvedPath = basePat.resolve(targetPath).normalize();
+                    File targetDir = resolvedPath.toFile();
+                    
                     if (targetDir.exists() && targetDir.isDirectory()) {
-                        currentDir = targetDir.getAbsolutePath();
+                        currentDir = resolvedPath.toString();
                     } else {
                         System.out.println("cd: " + targetPath + ": No such file or directory");
                     }
