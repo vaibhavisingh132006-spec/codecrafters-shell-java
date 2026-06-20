@@ -102,27 +102,27 @@ public class Main {
         List<String> args = new ArrayList<>();
         StringBuilder currentArg = new StringBuilder();
         boolean inQuotes = false;
-        boolean hasChars = false;
+        boolean tokenStarted = false;
 
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
 
             if (c == '\'') {
                 inQuotes = !inQuotes;
-                hasChars = true;
+                tokenStarted = true;
             } else if (Character.isWhitespace(c) && !inQuotes) {
-                if (hasChars || currentArg.length() > 0) {
+                if (tokenStarted) {
                     args.add(currentArg.toString());
                     currentArg.setLength(0);
-                    hasChars = false;
+                    tokenStarted = false;
                 }
             } else {
                 currentArg.append(c);
-                hasChars = true;
+                tokenStarted = true;
             }
         }
 
-        if (hasChars || currentArg.length() > 0) {
+        if (tokenStarted) {
             args.add(currentArg.toString());
         }
 
