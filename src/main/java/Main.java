@@ -24,37 +24,45 @@ public class Main {
                 continue;
             }
             
-            if (input.equals("exit")) {
+            String[] parts = input.split("\\s+");
+            String command = parts[0];
+            
+            if (command.equals("exit")) {
                 break;
-            } else if (input.equals("pwd")) {
+            } else if (command.equals("pwd")) {
                 System.out.println(currentDir);
-            } else if (input.startsWith("cd ")) {
-                String targetPath = input.substring(3).trim();
-                File targetDir = new File(targetPath);
-                if (targetDir.exists() && targetDir.isDirectory()) {
-                    currentDir = targetDir.getAbsolutePath();
-                } else {
-                    System.out.println("cd: " + targetPath + ": No such file or directory");
-                }
-            } else if (input.startsWith("echo ")) {
-                System.out.println(input.substring(5));
-            } else if (input.startsWith("type ")) {
-                String arg = input.substring(5).trim();
-                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
-                    System.out.println(arg + " is a shell builtin");
-                } else {
-                    String fullPath = getPath(arg);
-                    if (fullPath != null) {
-                        System.out.println(arg + " is " + fullPath);
+            } else if (command.equals("cd")) {
+                if (parts.length > 1) {
+                    String targetPath = parts[1];
+                    File targetDir = new File(targetPath);
+                    if (targetDir.exists() && targetDir.isDirectory()) {
+                        currentDir = targetDir.getAbsolutePath();
                     } else {
-                        System.out.println(arg + ": not found");
+                        System.out.println("cd: " + targetPath + ": No such file or directory");
+                    }
+                }
+            } else if (command.equals("echo")) {
+                if (input.length() > 5) {
+                    System.out.println(input.substring(5));
+                } else {
+                    System.out.println();
+                }
+            } else if (command.equals("type")) {
+                if (parts.length > 1) {
+                    String arg = parts[1];
+                    if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
+                        System.out.println(arg + " is a shell builtin");
+                    } else {
+                        String fullPath = getPath(arg);
+                        if (fullPath != null) {
+                            System.out.println(arg + " is " + fullPath);
+                        } else {
+                            System.out.println(arg + ": not found");
+                        }
                     }
                 }
             } else {
-                String[] parts = input.split("\\s+");
-                String command = parts[0];
                 String fullPath = getPath(command);
-                
                 if (fullPath != null) {
                     List<String> commandList = new ArrayList<>();
                     commandList.add("sh");
