@@ -113,8 +113,23 @@ public class Main {
                 currentArg.append(c);
                 tokenStarted = true;
                 isEscaped = false;
-            } else if (c == '\\' && !inSingleQuotes && !inDoubleQuotes) {
-                isEscaped = true;
+            } else if (c == '\\' && !inSingleQuotes) {
+                if (inDoubleQuotes) {
+                    if (i + 1 < input.length()) {
+                        char nextChar = input.charAt(i + 1);
+                        if (nextChar == '"' || nextChar == '\\' || nextChar == '$' || nextChar == '`') {
+                            isEscaped = true;
+                        } else {
+                            currentArg.append(c);
+                            tokenStarted = true;
+                        }
+                    } else {
+                        currentArg.append(c);
+                        tokenStarted = true;
+                    }
+                } else {
+                    isEscaped = true;
+                }
             } else if (c == '\'' && !inDoubleQuotes) {
                 inSingleQuotes = !inSingleQuotes;
                 tokenStarted = true;
