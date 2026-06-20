@@ -265,10 +265,18 @@ public class Main {
                     }
                 }
             } else if (command.equals("jobs")) {
+                int lastIndex = jobList.size() - 1;
+                int secondLastIndex = jobList.size() - 2;
                 for (int i = 0; i < jobList.size(); i++) {
                     Job job = jobList.get(i);
-                    boolean isMostRecent = (i == jobList.size() - 1);
-                    String marker = isMostRecent ? "+" : "-";
+                    String marker;
+                    if (i == lastIndex) {
+                        marker = "+";
+                    } else if (i == secondLastIndex) {
+                        marker = "-";
+                    } else {
+                        marker = " ";
+                    }
                     String statusPadded = String.format("%-24s", job.status);
                     String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.commandString;
                     System.out.println(line);
