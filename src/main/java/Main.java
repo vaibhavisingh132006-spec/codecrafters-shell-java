@@ -25,11 +25,13 @@ public class Main {
             
             if (input.equals("exit")) {
                 break;
+            } else if (input.equals("pwd")) {
+                System.out.println(System.getProperty("user.dir"));
             } else if (input.startsWith("echo ")) {
                 System.out.println(input.substring(5));
             } else if (input.startsWith("type ")) {
                 String arg = input.substring(5).trim();
-                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type")) {
+                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd")) {
                     System.out.println(arg + " is a shell builtin");
                 } else {
                     String fullPath = getPath(arg);
@@ -46,11 +48,8 @@ public class Main {
                 
                 if (fullPath != null) {
                     List<String> commandList = new ArrayList<>();
-                    // Execute via the system shell so Arg #0 is preserved as the original command name
                     commandList.add("sh");
                     commandList.add("-c");
-                    
-                    // Reconstruct the full command string to pass to sh -c
                     commandList.add(input);
                     
                     ProcessBuilder pb = new ProcessBuilder(commandList);
