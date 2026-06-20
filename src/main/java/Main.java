@@ -30,11 +30,37 @@ public class Main {
         }
     }
 
+    private static void reapJobs() {
+        int lastIndex = jobList.size() - 1;
+        int secondLastIndex = jobList.size() - 2;
+        List<Job> toRemove = new ArrayList<>();
+        for (int i = 0; i < jobList.size(); i++) {
+            Job job = jobList.get(i);
+            if (!job.process.isAlive()) {
+                String marker;
+                if (i == lastIndex) {
+                    marker = "+";
+                } else if (i == secondLastIndex) {
+                    marker = "-";
+                } else {
+                    marker = " ";
+                }
+                String statusPadded = String.format("%-24s", "Done");
+                String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.baseCommandString;
+                System.out.println(line);
+                toRemove.add(job);
+            }
+        }
+        jobList.removeAll(toRemove);
+    }
+
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
         String currentDir = System.getProperty("user.dir");
 
         while (true) {
+            reapJobs();
+
             System.out.print("$ ");
             System.out.flush();
 
@@ -269,9 +295,9 @@ public class Main {
                     }
                 }
             } else if (command.equals("jobs")) {
+                reapJobs();
                 int lastIndex = jobList.size() - 1;
                 int secondLastIndex = jobList.size() - 2;
-                List<Job> toRemove = new ArrayList<>();
                 for (int i = 0; i < jobList.size(); i++) {
                     Job job = jobList.get(i);
                     String marker;
@@ -282,20 +308,10 @@ public class Main {
                     } else {
                         marker = " ";
                     }
-
-                    boolean finished = !job.process.isAlive();
-                    String displayStatus = finished ? "Done" : "Running";
-                    String displayCommand = finished ? job.baseCommandString : job.commandString;
-
-                    String statusPadded = String.format("%-24s", displayStatus);
-                    String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + displayCommand;
+                    String statusPadded = String.format("%-24s", "Running");
+                    String line = "[" + job.jobNumber + "]" + marker + "  " + statusPadded + job.commandString;
                     System.out.println(line);
-
-                    if (finished) {
-                        toRemove.add(job);
-                    }
                 }
-                jobList.removeAll(toRemove);
             } else {
                 String fullPath = getPath(command);
 
