@@ -31,7 +31,6 @@ public class Main {
                 continue;
             }
             
-            // Look for redirection operators > or 1>
             String redirectFile = null;
             int redirectIndex = -1;
             for (int i = 0; i < parts.size(); i++) {
@@ -45,13 +44,13 @@ public class Main {
                 }
             }
             
-            // If redirection exists, extract the command parts and ensure the parent directory exists
             List<String> commandParts = parts;
             if (redirectIndex != -1) {
                 commandParts = new ArrayList<>(parts.subList(0, redirectIndex));
                 File file = new File(redirectFile);
-                if (file.getParentFile() != null) {
-                    file.getParentFile().mkdirs();
+                File parent = file.getParentFile();
+                if (parent != null) {
+                    parent.mkdirs();
                 }
             }
             
@@ -60,7 +59,6 @@ public class Main {
             }
             String command = commandParts.get(0);
             
-            // Execute built-ins or external commands
             if (command.equals("exit")) {
                 break;
             } else if (command.equals("pwd")) {
