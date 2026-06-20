@@ -33,11 +33,20 @@ public class Main {
                 continue;
             }
 
-            // Check for background execution token "&" as the last token
+            // Check for background execution token "&" as the last token.
+            // Handle both a standalone "&" token and a token that merely
+            // ends with "&" (e.g. if parsing ever glues it to the prior
+            // token), so background detection is robust either way.
             boolean runInBackground = false;
-            if (!parts.isEmpty() && parts.get(parts.size() - 1).equals("&")) {
-                runInBackground = true;
-                parts.remove(parts.size() - 1);
+            if (!parts.isEmpty()) {
+                String lastToken = parts.get(parts.size() - 1);
+                if (lastToken.equals("&")) {
+                    runInBackground = true;
+                    parts.remove(parts.size() - 1);
+                } else if (lastToken.endsWith("&") && lastToken.length() > 1) {
+                    runInBackground = true;
+                    parts.set(parts.size() - 1, lastToken.substring(0, lastToken.length() - 1));
+                }
             }
 
             if (parts.isEmpty()) {
