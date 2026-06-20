@@ -9,8 +9,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Main {
-    private static int jobCounter = 0;
     private static final List<Job> jobList = new ArrayList<>();
+
+    /**
+     * Computes the next job number to assign. Job numbers are recycled,
+     * not perpetually incremented: if the table is empty, start back at 1;
+     * otherwise use one more than the highest job number currently present.
+     * This must be computed fresh each time (not from a running counter),
+     * since jobs are removed from the table as they're reaped.
+     */
+    private static int nextJobNumber() {
+        int max = 0;
+        for (Job job : jobList) {
+            if (job.jobNumber > max) {
+                max = job.jobNumber;
+            }
+        }
+        return max + 1;
+    }
 
     private static class Job {
         int jobNumber;
@@ -349,16 +365,16 @@ public class Main {
                     Process process = pb.start();
 
                     if (runInBackground) {
-                        jobCounter++;
+                        int jobNumber = nextJobNumber();
                         long pid = process.pid();
-                        System.out.println("[" + jobCounter + "] " + pid);
+                        System.out.println("[" + jobNumber + "] " + pid);
 
                         String baseCommand = originalInputForJobs.trim();
                         if (baseCommand.endsWith("&")) {
                             baseCommand = baseCommand.substring(0, baseCommand.length() - 1).trim();
                         }
                         String commandForJob = baseCommand + " &";
-                        jobList.add(new Job(jobCounter, pid, commandForJob, baseCommand, process));
+                        jobList.add(new Job(jobNumber, pid, commandForJob, baseCommand, process));
                     } else {
                         process.waitFor();
                     }
