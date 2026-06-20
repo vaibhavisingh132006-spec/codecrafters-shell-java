@@ -147,12 +147,14 @@ public class Main {
                     }
                 }
             } else {
-                // This is where the 'else' block starts for handling external commands
+                // External Command Execution Block
                 String fullPath = getPath(command);
 
                 if (fullPath != null) {
                     List<String> executeArgs = new ArrayList<>();
-                    executeArgs.add(fullPath);
+                    
+                    // CRITICAL FIX: Pass the raw, original command name as argv[0]
+                    executeArgs.add(command);
 
                     for (int i = 1; i < commandParts.size(); i++) {
                         executeArgs.add(commandParts.get(i));
@@ -160,7 +162,10 @@ public class Main {
 
                     ProcessBuilder pb = new ProcessBuilder(executeArgs);
                     pb.directory(new File(currentDir));
-                    pb.environment().put("ARGV0", command);
+                    
+                    // CRITICAL FIX: Tell ProcessBuilder to resolve and execute the binary 
+                    // via fullPath, independent of what we named argv[0] above.
+                    pb.command().set(0, fullPath);
 
                     if (redirectFile != null) {
                         pb.redirectOutput(new File(redirectFile));
