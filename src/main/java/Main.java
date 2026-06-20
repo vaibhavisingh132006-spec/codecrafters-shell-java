@@ -6,7 +6,7 @@ public class Main {
         
         while (true) {
             System.out.print("$ ");
-            System.out.flush(); // Keep this to make sure the stream flushes correctly
+            System.out.flush();
             
             if (!scanner.hasNextLine()) {
                 break;
@@ -14,9 +14,9 @@ public class Main {
             
             String input = scanner.nextLine().trim();
             
-            // CodeCrafters checks for exactly "exit" based on your screenshot
+            // Check if the command is exactly "exit"
             if (input.equals("exit")) {
-                break; // Break the loop to let the main method finish and terminate cleanly
+                System.exit(0); // Forces the JVM to shutdown instantly
             }
             
             System.out.println(input + ": command not found");
