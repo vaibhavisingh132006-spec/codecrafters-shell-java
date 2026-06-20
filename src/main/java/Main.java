@@ -147,7 +147,7 @@ public class Main {
                     }
                 }
             } else {
-                // External Command Execution Block
+                // This is where the 'else' block starts for handling external commands
                 String fullPath = getPath(command);
 
                 if (fullPath != null) {
