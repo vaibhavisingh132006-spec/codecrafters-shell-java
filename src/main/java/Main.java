@@ -12,13 +12,6 @@ import java.util.List;
 public class Main {
     private static final List<Job> jobList = new ArrayList<>();
 
-    /**
-     * Computes the next job number to assign. Job numbers are recycled,
-     * not perpetually incremented: if the table is empty, start back at 1;
-     * otherwise use one more than the highest job number currently present.
-     * This must be computed fresh each time (not from a running counter),
-     * since jobs are removed from the table as they're reaped.
-     */
     private static int nextJobNumber() {
         int max = 0;
         for (Job job : jobList) {
@@ -45,13 +38,6 @@ public class Main {
         }
     }
 
-    /**
-     * Returns the marker ('+', '-', or ' ') for the job at the given index,
-     * based on a snapshot of jobList. The LAST job in insertion order is the
-     * "current" job ('+'), the SECOND-TO-LAST is the "previous" job ('-').
-     * Both reapJobs() and the jobs builtin call this so markers are always
-     * computed the exact same way.
-     */
     private static String markerFor(int index, int size) {
         if (index == size - 1) {
             return "+";
@@ -62,15 +48,6 @@ public class Main {
         }
     }
 
-    /**
-     * Shared reaping logic. Checks every job in the table; for any whose
-     * process has exited, prints a single "Done" line (marker computed from
-     * the CURRENT snapshot of jobList, before removal) and queues it for
-     * removal. Removal happens after the scan so markers for all jobs in
-     * this pass are computed consistently. Called both before every prompt
-     * and at the start of the jobs builtin, so a job's Done line is only
-     * ever printed once, from whichever call sees it exit first.
-     */
     private static void reapJobs() {
         int size = jobList.size();
         List<Job> toRemove = new ArrayList<>();
@@ -90,16 +67,6 @@ public class Main {
         }
     }
 
-    /**
-     * The jobs builtin. Takes ONE snapshot of the job table (fixed size),
-     * computes each job's marker from that snapshot, and prints every job's
-     * line (Done or Running) in its original table position, in a single
-     * pass. This is important: if we reaped first and then recomputed
-     * markers against the now-shrunk list, jobs that were never "+"/"-"
-     * candidates could wrongly inherit a marker just because the list got
-     * smaller. Removal of newly-completed jobs happens only after all
-     * lines for this snapshot have been printed.
-     */
     private static void printJobsList() {
         printJobsList(System.out);
     }
@@ -127,26 +94,11 @@ public class Main {
         }
     }
 
-    /** Names of all shell builtins, used to decide how a pipeline stage must run. */
     private static boolean isBuiltin(String command) {
         return command.equals("echo") || command.equals("exit") || command.equals("type")
                 || command.equals("pwd") || command.equals("cd") || command.equals("jobs");
     }
 
-    /**
-     * Executes a single builtin command, writing its normal output to the
-     * given PrintStream instead of always to System.out. This lets the same
-     * builtin logic be reused both for the ordinary (non-pipeline) command
-     * path and for a builtin acting as one stage of a pipeline, where its
-     * output must instead flow into the next stage's input pipe.
-     *
-     * currentDir is passed by reference via a one-element array because
-     * `cd` mutates it and Java cannot capture a mutable local otherwise.
-     *
-     * Returns true if `exit` was invoked (caller should terminate the shell
-     * loop); the pipeline path never calls this with "exit" as a stage, but
-     * the flag is threaded through for the single-command path's reuse too.
-     */
     private static boolean runBuiltin(List<String> commandParts, String[] currentDirHolder, java.io.PrintStream out) {
         String command = commandParts.get(0);
 
@@ -204,19 +156,6 @@ public class Main {
         return false;
     }
 
-    /**
-     * Adapts a mixed pipeline (a mix of Threads for builtin stages and
-     * Processes for external stages) into something that satisfies the
-     * java.lang.Process contract, so it can be stored directly in the
-     * existing Job.process field and works automatically with the
-     * existing reapJobs() / printJobsList() logic (both of which only
-     * ever call Process#isAlive()).
-     *
-     * Only the methods actually used elsewhere in this file (isAlive(),
-     * pid(), waitFor()) are meaningfully implemented; the remaining
-     * abstract Process methods are given minimal-but-correct
-     * implementations since nothing else in this shell calls them.
-     */
     private static class PipelineHandle extends Process {
         private final List<Thread> threads;
         private final List<Process> processes;
@@ -226,9 +165,6 @@ public class Main {
         PipelineHandle(List<Thread> threads, List<Process> processes) {
             this.threads = threads;
             this.processes = processes;
-            // Prefer the last external process's real PID if there is one
-            // (so `jobs`/reaping output shows a real PID when the final
-            // stage happens to be external); otherwise synthesize one.
             long pid = -1;
             if (!processes.isEmpty()) {
                 pid = processes.get(processes.size() - 1).pid();
@@ -241,7 +177,6 @@ public class Main {
             return fakePid;
         }
 
-        /** Alive while any builtin-stage thread is still running or any external process hasn't exited. */
         @Override
         public boolean isAlive() {
             for (Thread t : threads) {
@@ -296,10 +231,6 @@ public class Main {
         }
     }
 
-    /**
-     * Holds one pipeline segment's command tokens plus any redirects that
-     * were attached to that segment specifically.
-     */
     private static class CommandSpec {
         List<String> commandParts;
         String outFile;
@@ -308,12 +239,6 @@ public class Main {
         boolean appendErr;
     }
 
-    /**
-     * Same redirect-token scanning as the single-command path, but
-     * extracted into a reusable form so each pipeline segment can be
-     * parsed independently (e.g. "wc > out.txt" as the last stage of a
-     * pipe still has its own output redirect honored).
-     */
     private static CommandSpec parseRedirectsForSegment(List<String> tokens) {
         String outFile = null;
         String errFile = null;
@@ -386,7 +311,6 @@ public class Main {
         return spec;
     }
 
-    /** Splits a token list on bare "|" tokens into pipeline segments. */
     private static List<List<String>> splitOnPipe(List<String> tokens) {
         List<List<String>> segments = new ArrayList<>();
         List<String> current = new ArrayList<>();
@@ -417,39 +341,10 @@ public class Main {
             if (!file.exists()) file.createNewFile();
         } else {
             try (PrintWriter writer = new PrintWriter(new FileWriter(path))) {
-                // truncate/create only
             }
         }
     }
 
-    /**
-     * Runs a pipeline ("cmd1 | cmd2 | ... | cmdN") where any stage may be
-     * either an external command or a shell builtin (echo, type, pwd, cd,
-     * jobs).
-     *
-     * Fast path: if every stage is external, this is unchanged from before
-     * -- ProcessBuilder.startPipeline() lets the OS wire real pipes between
-     * processes, which is simpler and cheaper than manual pumping.
-     *
-     * General path: if any stage is a builtin, we can't hand it to
-     * ProcessBuilder.startPipeline (builtins aren't processes), so each
-     * stage instead gets its own thread plus a real PipedInputStream /
-     * PipedOutputStream pair connecting it to its neighbors:
-     *   - External stages still run as real processes; their stdin/stdout
-     *     are connected to the piped streams via Redirect.PIPE, with a
-     *     pump thread copying bytes between the Process's stream and the
-     *     pipeline's PipedInputStream/PipedOutputStream.
-     *   - Builtin stages run their existing logic (factored into
-     *     runBuiltin) directly against a PrintStream wrapping their
-     *     PipedOutputStream destination. Builtins never read their stdin
-     *     (matching real bash builtins like echo/type/pwd/cd/jobs), so a
-     *     stage feeding a builtin just has its output drained and
-     *     discarded -- exactly like piping into `true` in bash.
-     *   - `cd` occurring inside a pipeline does NOT persist to the parent
-     *     shell, matching default bash semantics (every pipeline stage --
-     *     including the last, since this shell does not implement
-     *     lastpipe -- runs in what is effectively its own subshell).
-     */
     private static void runPipeline(List<String> tokens, String currentDir, boolean runInBackground, String originalInputForJobs) throws Exception {
         List<List<String>> segments = splitOnPipe(tokens);
 
@@ -474,7 +369,6 @@ public class Main {
         }
     }
 
-    /** Original all-external fast path, extracted unchanged from before. */
     private static void runExternalPipeline(List<CommandSpec> specs, String currentDir, boolean runInBackground, String originalInputForJobs) throws Exception {
         List<ProcessBuilder> builders = new ArrayList<>();
 
@@ -504,9 +398,6 @@ public class Main {
             boolean isFirst = (idx == 0);
             boolean isLast = (idx == specs.size() - 1);
 
-            // Only the first stage's stdin and last stage's stdout need
-            // explicit handling here; startPipeline wires every adjacent
-            // pair together automatically.
             if (isFirst) {
                 pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
             }
@@ -537,7 +428,6 @@ public class Main {
         List<Process> processes = ProcessBuilder.startPipeline(builders);
 
         if (runInBackground) {
-            // Track the pipeline as one job, represented by its last stage.
             Process lastProcess = processes.get(processes.size() - 1);
             int jobNumber = nextJobNumber();
             long pid = lastProcess.pid();
@@ -556,32 +446,9 @@ public class Main {
         }
     }
 
-    /**
-     * General pipeline path used whenever at least one stage is a builtin.
-     * Connects every adjacent pair of stages with a PipedOutputStream /
-     * PipedInputStream pair and runs each stage on its own thread:
-     *   - external stage: a real Process, with one pump thread copying its
-     *     stdout to the pipeline's PipedOutputStream (or vice versa for the
-     *     stage's stdin), since Process streams and Piped streams can't be
-     *     wired together directly.
-     *   - builtin stage: runs runBuiltin() directly, writing to a
-     *     PrintStream over the pipeline's PipedOutputStream.
-     *
-     * The whole pipeline (all stages' threads + any external processes) is
-     * waited on before returning, for a foreground pipeline. For a
-     * background pipeline, the prompt loop is not blocked because every
-     * stage already runs on its own thread/process started above; a
-     * PipelineHandle (a Process subclass whose isAlive() polls every
-     * underlying thread/process) is stored in the job table exactly like a
-     * single Process would be for an all-external pipeline, so the
-     * existing reaping code works unchanged.
-     */
     private static void runMixedPipeline(List<CommandSpec> specs, String currentDir, boolean runInBackground, String originalInputForJobs) throws Exception {
         int n = specs.size();
 
-        // outputDestinations[i] is where stage i's stdout should go:
-        // a PipedOutputStream feeding stage i+1, or null for the last stage
-        // (handled specially: file redirect or inherited System.out).
         java.io.PipedOutputStream[] pipeOuts = new java.io.PipedOutputStream[n - 1];
         java.io.PipedInputStream[] pipeIns = new java.io.PipedInputStream[n - 1];
         for (int i = 0; i < n - 1; i++) {
@@ -589,12 +456,6 @@ public class Main {
             pipeIns[i] = new java.io.PipedInputStream(pipeOuts[i], 65536);
         }
 
-        // Resolve the final destination for the last stage's stdout, but
-        // ONLY if the last stage is a builtin -- if the last stage is
-        // external, its own ProcessBuilder redirect (set up inside the
-        // loop below, same as the all-external fast path) is the sole
-        // writer to the output file or terminal; opening a second handle
-        // here would race with / duplicate that.
         final CommandSpec lastSpec = specs.get(n - 1);
         final boolean lastIsBuiltin = isBuiltin(lastSpec.commandParts.get(0));
         final java.io.OutputStream lastStageOut;
@@ -606,17 +467,11 @@ public class Main {
                 lastStageOut = System.out;
             }
         } else {
-            // Not used by the external last-stage branch (it redirects
-            // directly via ProcessBuilder), but stageOut below still needs
-            // a non-null placeholder value of the right static type.
             lastStageOut = System.out;
         }
 
         List<Thread> threads = new ArrayList<>();
         List<Process> externalProcesses = new ArrayList<>();
-        // currentDirHolder lets a `cd` builtin stage mutate a "directory"
-        // value without affecting the real shell's currentDir (pipeline
-        // stages run in an effective subshell, matching bash).
         String[] currentDirHolder = new String[] { currentDir };
 
         for (int idx = 0; idx < n; idx++) {
@@ -629,9 +484,6 @@ public class Main {
             java.io.OutputStream stageOut = isLast ? lastStageOut : pipeOuts[idx];
 
             if (isBuiltin(command)) {
-                // Builtins never read stdin; if this stage isn't first, we
-                // still must drain (and discard) the upstream pipe so the
-                // previous stage never blocks writing into a full buffer.
                 final java.io.InputStream drainSource = stageIn;
                 if (drainSource != null) {
                     Thread drainer = new Thread(() -> {
@@ -650,7 +502,7 @@ public class Main {
                 }
 
                 final java.io.OutputStream finalStageOut = stageOut;
-                final boolean closeAfter = !isLast; // don't close System.out / the file early via this path's logic
+                final boolean closeAfter = !isLast; 
                 Thread builtinThread = new Thread(() -> {
                     java.io.PrintStream ps = new java.io.PrintStream(finalStageOut, true);
                     try {
@@ -669,8 +521,6 @@ public class Main {
                 String fullPath = getPath(command);
                 if (fullPath == null) {
                     System.out.println(command + ": command not found");
-                    // Best-effort cleanup: close any pipes already opened so
-                    // upstream/downstream threads don't hang forever.
                     closeQuietly(pipeOuts);
                     closeQuietly(pipeIns);
                     return;
@@ -688,13 +538,7 @@ public class Main {
 
                 ProcessBuilder pb = new ProcessBuilder(executeArgs);
                 pb.directory(new File(currentDirHolder[0]));
-
-                // stdin: inherit from terminal if first stage, else PIPE
-                // (a pump thread will copy bytes in from the previous stage).
                 pb.redirectInput(isFirst ? ProcessBuilder.Redirect.INHERIT : ProcessBuilder.Redirect.PIPE);
-
-                // stdout: if last stage, go straight to file or inherit;
-                // otherwise PIPE (a pump thread copies bytes out to the next stage).
                 if (isLast) {
                     if (spec.outFile != null) {
                         pb.redirectOutput(spec.appendOut
@@ -719,9 +563,6 @@ public class Main {
                 Process process = pb.start();
                 externalProcesses.add(process);
 
-                // Pump thread: previous stage's PipedInputStream -> this
-                // process's stdin (only needed when not the first stage,
-                // since the first stage's stdin is inherited directly).
                 if (!isFirst) {
                     final java.io.InputStream from = stageIn;
                     final java.io.OutputStream to = process.getOutputStream();
@@ -730,8 +571,6 @@ public class Main {
                     pumpIn.start();
                 }
 
-                // Pump thread: this process's stdout -> next stage's
-                // PipedOutputStream (only needed when not the last stage).
                 if (!isLast) {
                     final java.io.InputStream from = process.getInputStream();
                     final java.io.OutputStream to = stageOut;
@@ -743,13 +582,6 @@ public class Main {
         }
 
         if (runInBackground) {
-            // Track the whole pipeline as one background job. There may be
-            // no single Process to represent it (e.g. the last stage is a
-            // builtin running on a plain Thread rather than a Process), so
-            // we wrap every stage's Thread/Process in a PipelineHandle,
-            // which implements Process#isAlive() by polling all of them
-            // directly (non-blocking) -- no extra supervisor thread is
-            // needed since isAlive() never blocks.
             PipelineHandle handle = new PipelineHandle(threads, externalProcesses);
             int jobNumber = nextJobNumber();
             System.out.println("[" + jobNumber + "] " + handle.pid());
@@ -775,7 +607,6 @@ public class Main {
         }
     }
 
-    /** Copies all bytes from one stream to another, then closes both. Run on its own thread. */
     private static void pump(java.io.InputStream from, java.io.OutputStream to) {
         try {
             byte[] buf = new byte[8192];
@@ -808,8 +639,6 @@ public class Main {
         String currentDir = System.getProperty("user.dir");
 
         while (true) {
-            // Reap before every prompt: foreground command, builtin,
-            // background launch, or even empty input all loop back here.
             reapJobs();
 
             System.out.print("$ ");
@@ -847,10 +676,6 @@ public class Main {
                 continue;
             }
 
-            // Pipeline detection: if a bare "|" token is present, hand the
-            // whole thing off to the pipeline handler and skip the normal
-            // single-command path entirely (redirect parsing for each
-            // segment happens inside runPipeline()).
             if (parts.contains("|")) {
                 runPipeline(parts, currentDir, runInBackground, originalInputForJobs);
                 continue;
@@ -937,7 +762,6 @@ public class Main {
                     if (!file.exists()) file.createNewFile();
                 } else {
                     try (PrintWriter writer = new PrintWriter(new FileWriter(stderrFile))) {
-                        // truncate/create only
                     }
                 }
             }
